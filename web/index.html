@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Valam PDS Dashboard</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <main id="loginView" class="login-wrap">
+    <section class="login-card">
+      <div class="brand-mark">V</div>
+      <p class="eyebrow">VALAM DISTRICT</p>
+      <h1>Public Distribution System</h1>
+      <p class="muted">Sign in to manage dispatch planning and delivery records.</p>
+      <form id="loginForm">
+        <label for="username">Username</label>
+        <input id="username" autocomplete="username" required value="admin">
+        <label for="password">Password</label>
+        <input id="password" type="password" autocomplete="current-password" required placeholder="Enter password">
+        <button class="primary full" type="submit">Sign in</button>
+        <p id="loginError" class="error" role="alert"></p>
+      </form>
+      <p class="demo-hint">Demo login: <strong>admin</strong> / <strong>valam123</strong></p>
+    </section>
+  </main>
+
+  <main id="appView" class="app hidden">
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark small">V</span><div><strong>Valam PDS</strong><small>Supply chain dashboard</small></div></div>
+      <div class="top-actions"><span id="connection" class="connection">Database connected</span><button id="logoutButton" class="quiet">Sign out</button></div>
+    </header>
+    <section class="welcome">
+      <div><p class="eyebrow">OPERATIONS</p><h1 id="pageTitle">Dashboard</h1><p class="muted">Use the tabs to manage the same operations as the console menu.</p></div>
+      <div class="welcome-actions"><button id="processButton" class="primary">Process pending requests</button><button id="refreshButton" class="secondary">Refresh</button></div>
+    </section>
+    <nav id="menu" class="menu-tabs" aria-label="PDS operations">
+      <button class="active" data-page="dashboard">Dashboard</button><button data-page="requests">Requests</button>
+      <button data-page="warehouses">Warehouse stock</button><button data-page="shops">Shop stock</button>
+      <button data-page="dispatches">Dispatch records</button><button data-page="receipts">Receipt history</button>
+    </nav>
+    <section id="page-dashboard" class="page-view">
+    <section class="stats">
+      <article class="stat-card"><span>Saved requests</span><strong id="requestCount">—</strong><small>Stored in SQLite</small></article>
+      <article class="stat-card"><span>Dispatch records</span><strong id="dispatchCount">—</strong><small>Saved delivery trips</small></article>
+      <article class="stat-card"><span>Receipt status</span><strong id="receiptCount">—</strong><small>Awaiting confirmation</small></article>
+    </section>
+      <section class="panel"><h2>Quick start</h2><p class="muted">Create requests, process them by urgency, inspect warehouse and shop balances, then record a confirmed receipt. Updates are saved to the SQLite database.</p><button class="primary" data-go="requests">Create or view requests</button></section>
+    </section>
+    <section id="page-requests" class="page-view hidden">
+      <section class="panel">
+        <div class="panel-head"><div><h2>Delivery requests</h2><p class="muted">Review request priority, quantities, status, and pending reason.</p></div></div>
+        <form id="requestForm" class="request-form">
+          <label>Shop<select id="requestShop" required><option value="FPS01">FPS01 – North One</option><option value="FPS02">FPS02 – North Two</option><option value="FPS03">FPS03 – Central One</option><option value="FPS04">FPS04 – Central Two</option><option value="FPS05">FPS05 – South One</option><option value="FPS06">FPS06 – Remote Shop (no road)</option></select></label><label>Urgency<select id="requestUrgency"><option>HIGH</option><option>MEDIUM</option><option>LOW</option></select></label>
+          <label>Rice kg<input id="rice" type="number" min="0" step="1" value="0"></label><label>Wheat kg<input id="wheat" type="number" min="0" step="1" value="0"></label><label>Sugar kg<input id="sugar" type="number" min="0" step="1" value="0"></label>
+          <button class="primary" type="submit">Create request</button>
+        </form>
+        <div class="table-wrap"><table><thead><tr><th>Request</th><th>Shop</th><th>Urgency</th><th>Items</th><th>Total kg</th><th>Status</th><th>Pending reason</th></tr></thead><tbody id="requestRows"></tbody></table></div>
+      </section>
+    </section>
+    <section id="page-warehouses" class="page-view hidden"><section class="panel"><div class="panel-head"><div><h2>Warehouse stock</h2><p class="muted">Add warehouses and change their current stock balances.</p></div></div>
+      <form id="warehouseForm" class="request-form"><label>Warehouse ID<input id="warehouseId" required placeholder="W3"></label><label>Warehouse name<input id="warehouseName" required></label><label>Rice kg<input id="warehouseRice" type="number" min="0" value="0"></label><label>Wheat kg<input id="warehouseWheat" type="number" min="0" value="0"></label><label>Sugar kg<input id="warehouseSugar" type="number" min="0" value="0"></label><label>Connect to<select id="warehouseConnect"><option>W1</option><option>W2</option><option>J1</option><option>J2</option><option>J3</option><option>J4</option></select></label><label>Road time (minutes)<input id="warehouseTime" type="number" min="0.1" step="0.1" value="5"></label><button class="primary" type="submit">Add warehouse</button></form>
+      <form id="warehouseStockForm" class="request-form"><label>Warehouse<select id="stockWarehouse"><option value="W1">W1 – Valam North Warehouse</option><option value="W2">W2 – Valam South Warehouse</option></select></label><label>Commodity<select id="stockCommodity"><option>Rice</option><option>Wheat</option><option>Sugar</option></select></label><label>New stock (kg)<input id="stockQuantity" type="number" min="0" step="0.1" required></label><button class="secondary" type="submit">Save stock balance</button></form>
+      <div class="table-wrap"><table><thead><tr><th>Warehouse</th><th>Name</th><th>Rice kg</th><th>Wheat kg</th><th>Sugar kg</th></tr></thead><tbody id="warehouseRows"></tbody></table></div></section></section>
+    <section id="page-shops" class="page-view hidden"><section class="panel"><h2>Fair Price Shop stock</h2><p class="muted">Add shops here. A shop's stock increases only after you confirm a delivery receipt.</p>
+      <form id="shopForm" class="request-form"><label>Shop ID<input id="newShopId" required placeholder="FPS07"></label><label>Shop name<input id="newShopName" required></label><label>Rice kg<input id="shopRice" type="number" min="0" value="0"></label><label>Wheat kg<input id="shopWheat" type="number" min="0" value="0"></label><label>Sugar kg<input id="shopSugar" type="number" min="0" value="0"></label><label>Connect to<select id="shopConnect"><option>W1</option><option>W2</option><option>J1</option><option>J2</option><option>J3</option><option>J4</option></select></label><label>Road time (minutes)<input id="shopTime" type="number" min="0.1" step="0.1" value="5"></label><button class="primary" type="submit">Add fair price shop</button></form>
+      <div class="table-wrap"><table><thead><tr><th>Shop</th><th>Name</th><th>Rice kg</th><th>Wheat kg</th><th>Sugar kg</th></tr></thead><tbody id="shopRows"></tbody></table></div></section></section>
+    <section id="page-dispatches" class="page-view hidden"><section class="panel"><div class="panel-head"><div><h2>Dispatch records</h2><p class="muted">Trip records are stored in SQLite.</p></div><div class="panel-actions"><select id="receiptDispatch" aria-label="Select dispatch to confirm"></select><button id="confirmReceipt" class="primary">Confirm receipt</button></div></div><div class="table-wrap"><table><thead><tr><th>Dispatch</th><th>Request</th><th>Warehouse</th><th>Shop</th><th>Vehicle</th><th>Route</th><th>Receipt</th></tr></thead><tbody id="dispatchRows"></tbody></table></div></section></section>
+    <section id="page-receipts" class="page-view hidden"><section class="panel"><h2>Receipt history</h2><p class="muted">Confirmed deliveries from the database.</p><div class="table-wrap"><table><thead><tr><th>Dispatch</th><th>Shop</th><th>Items</th><th>Confirmed at</th></tr></thead><tbody id="receiptRows"></tbody></table></div></section></section>
+    <p id="message" class="message" aria-live="polite"></p>
+    <footer>Valam PDS · Local project demonstration · Java backend + SQLite database</footer>
+  </main>
+  <script src="/app.js"></script>
+</body>
+</html>

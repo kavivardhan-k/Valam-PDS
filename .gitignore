@@ -1,0 +1,8 @@
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+database/
+build/
+*.class
+oracleJdk-*/

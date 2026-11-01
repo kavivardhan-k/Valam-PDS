@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Valam PDS</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <main id="loginView" class="login-wrap">
+    <section class="login-shell">
+      <div class="login-brand-panel">
+        <div class="brand-mark">V</div>
+        <p class="eyebrow">VALAM DISTRICT · SUPPLY OFFICE</p>
+        <h1>Public distribution operations</h1>
+        <p>Manage essential stock, prioritize shop requests, and coordinate deliveries across the district.</p>
+        <div class="login-assurance"><span>✓</span><div><strong>Operations access</strong><small>Sign in to continue to the Valam PDS workspace.</small></div></div>
+        <div class="login-assurance"><span>⌖</span><div><strong>Connected district network</strong><small>Warehouse, shop, and road records in one place.</small></div></div>
+      </div>
+      <section class="login-card">
+        <div class="login-card-heading"><span class="section-kicker">STAFF ACCESS</span><h2>Choose your work area</h2><p class="muted">Select the account type printed on your government-issued login details.</p></div>
+        <div class="role-choice" id="roleChoice"><button type="button" class="role-card" data-role="WAREHOUSE"><span class="role-icon">▣</span><strong>Warehouse</strong><small>Stock, requests and dispatch planning</small></button><button type="button" class="role-card" data-role="FPS"><span class="role-icon">⌂</span><strong>Fair Price Shop</strong><small>Shop stock, monthly allocation and receipts</small></button></div>
+        <div id="loginPanel" class="hidden"><button id="changeRole" class="back-link" type="button">← Change work area</button><p id="selectedRoleLabel" class="selected-role-label"></p>
+          <form id="loginForm" class="auth-form"><div id="loginShopWrap" class="hidden"><label for="loginShop">Assigned Fair Price Shop</label><select id="loginShop" required><option value="">Choose your assigned shop</option></select></div><label for="username">Government user ID</label><input id="username" autocomplete="username" required placeholder="Enter the ID provided to you"><label for="password">Password</label><input id="password" type="password" autocomplete="current-password" required placeholder="Enter your password"><div class="captcha-panel"><div><span class="section-kicker">QUICK VERIFICATION</span><strong id="loginCaptchaQuestion">Loading check…</strong></div><button id="refreshLoginCaptcha" type="button" class="captcha-refresh" aria-label="Get a new verification question">↻</button></div><label for="loginCaptchaAnswer">Answer</label><input id="loginCaptchaAnswer" inputmode="numeric" autocomplete="off" required placeholder="Enter the answer"><button class="primary full auth-submit" type="submit">Continue to workspace <span>→</span></button><p id="loginError" class="error" role="alert"></p></form>
+          <div id="loginDemoAccount" class="demo-account"><strong id="demoRoleLabel">Demo credentials</strong><span id="demoCredentials"></span></div>
+        </div>
+        <p class="portal-disclaimer">Valam PDS is a fictional academic demonstration. Accounts and verification are local to this project; this is not an official government service.</p>
+      </section>
+    </section>
+    <footer class="login-footer">VALAM PDS · DISTRICT SUPPLY OPERATIONS · LOCAL DEMONSTRATION</footer>
+  </main>
+
+  <main id="appView" class="app hidden">
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark small">V</span><div><strong>Valam PDS</strong><small>District supply operations</small></div></div>
+      <div class="top-actions">
+        <span id="connection" class="connection">Records connected</span>
+        <details id="profileMenu" class="profile-menu">
+          <summary class="profile-trigger" aria-label="Signed-in profile menu">
+            <span id="profileAvatar" class="profile-avatar">A</span>
+            <span class="profile-copy"><strong id="profileName">Admin</strong><small id="profileRole">Operations</small></span>
+            <span class="profile-chevron" aria-hidden="true">⌄</span>
+          </summary>
+          <div class="profile-popover">
+            <div class="profile-account"><span id="profilePopoverAvatar" class="profile-avatar large">A</span><div><strong id="profilePopoverName">Admin</strong><small id="profileRolePopover">District operations</small></div></div>
+            <div class="profile-divider"></div>
+            <button id="logoutButton" class="profile-signout" type="button">Sign out</button>
+          </div>
+        </details>
+      </div>
+    </header>
+    <div class="app-layout">
+      <aside class="sidebar">
+        <div class="sidebar-caption">VALAM DISTRICT OFFICE</div>
+        <nav id="menu" class="side-nav" aria-label="PDS operations">
+          <div class="nav-group"><span class="nav-heading">OVERVIEW</span>
+            <button class="nav-link active" data-page="dashboard"><span class="nav-icon">⌂</span><span class="nav-copy"><strong>Dashboard</strong><small>Daily operations</small></span></button>
+          </div>
+          <div class="nav-group action-group" data-visible-role="FPS"><span class="nav-heading">ACTION NEEDED</span>
+            <button class="nav-link nav-action" data-page="confirmations"><span class="nav-icon">✓</span><span class="nav-copy"><strong>Confirm receipts</strong><small>Shop handovers</small></span><span id="receiptNavCount" class="nav-count">0</span></button>
+          </div>
+          <div class="nav-group"><span class="nav-heading">SUPPLY OPERATIONS</span>
+            <button class="nav-link" data-page="requests"><span class="nav-icon">＋</span><span class="nav-copy"><strong>Requests</strong><small>Replenishment queue</small></span></button>
+            <button class="nav-link" data-page="dispatches"><span class="nav-icon">⇢</span><span class="nav-copy"><strong>Dispatches</strong><small>Trips and status</small></span></button>
+            <button class="nav-link" data-page="receipts" data-visible-role="FPS"><span class="nav-icon">▤</span><span class="nav-copy"><strong>Receipt history</strong><small>Confirmed deliveries</small></span></button>
+          </div>
+          <div class="nav-group"><span class="nav-heading">INVENTORY & NETWORK</span>
+            <button class="nav-link" data-page="warehouses" data-visible-role="WAREHOUSE"><span class="nav-icon">▣</span><span class="nav-copy"><strong>Warehouses</strong><small>District stock</small></span></button>
+            <button class="nav-link" data-page="shops" data-visible-role="BOTH"><span class="nav-icon">⌂</span><span class="nav-copy"><strong>Fair Price Shops</strong><small>Shop stock</small></span></button>
+            <button class="nav-link" data-page="routes" data-visible-role="BOTH"><span class="nav-icon">⌁</span><span class="nav-copy"><strong>Road map</strong><small>Travel connections</small></span></button>
+          </div>
+        </nav>
+        <div class="sidebar-foot"><span class="live-dot"></span><span><strong>VALAM PDS</strong><small></small></span></div>
+      </aside>
+      <div class="workspace">
+        <section class="welcome">
+          <div><p class="eyebrow" id="pageKicker">LIVE OPERATIONS</p><h1 id="pageTitle">Operations overview</h1><p id="pageSubtitle" class="muted">A clear view of district supply activity.</p></div>
+          <div class="welcome-actions"><span class="today-label" id="todayLabel"></span><button id="refreshButton" class="secondary">Refresh records</button></div>
+        </section>
+    <section id="page-dashboard" class="page-view">
+    <section class="stats">
+      <article class="stat-card"><span>Total delivery requests</span><strong id="requestCount">—</strong><small>All requests recorded</small></article>
+      <article class="stat-card success-stat"><span>Successful deliveries</span><strong id="successfulDeliveryCount">—</strong><small>Receipts confirmed by shops</small></article>
+      <article class="stat-card unable-stat"><span>Unable to deliver</span><strong id="unableCount">—</strong><small>Requests waiting with a reason</small></article>
+      <article class="stat-card"><span>Dispatch records</span><strong id="dispatchCount">—</strong><small>Trips assigned to vehicles</small></article>
+      <article class="stat-card"><span>Awaiting receipt</span><strong id="receiptCount">—</strong><small>Pending shop confirmation</small></article>
+    </section>
+      <section id="fpsQuotaPanel" class="panel fps-quota-panel hidden"><div class="panel-head"><div><span class="section-kicker">THIS MONTH</span><h2>Shop allocation</h2><p class="muted">Monthly figures show the Fair Price Shop's aggregate allocation and supply progress.</p></div></div><div class="fps-people-row"><article class="people-count-card"><span>PEOPLE REGISTERED AT THIS SHOP</span><strong id="fpsPeopleCount">—</strong><small>Customer count used for this shop's planning estimate</small></article><form id="fpsPopulationForm" class="population-update-form"><label for="fpsPopulationInput">Update people count</label><input id="fpsPopulationInput" type="number" min="1" step="1" required><button class="secondary" type="submit">Save count</button></form></div><div id="quotaCards" class="quota-grid"></div><p class="quota-note">Planning estimate only: Rice 5 kg, Wheat 2 kg and Sugar 1 kg per registered person are used to calculate a shop-level monthly allocation. This is not a fixed limit for each person or family; household entitlements vary with family size and applicable policy. Progress counts goods received this month. Goods still on the road reserve allocation until receipt is confirmed.</p></section><section class="panel fleet-panel" data-visible-role="WAREHOUSE">
+        <div class="panel-head"><div><span class="section-kicker">FLEET STATUS</span><h2>Vehicles on the road</h2><p class="muted">A vehicle becomes available after its shop receipt is confirmed.</p></div><span id="fleetSummary" class="network-summary">Loading fleet…</span></div>
+        <div id="fleetCards" class="fleet-grid"></div>
+        <button type="button" id="fleetReceiptLink" class="secondary fleet-receipt-link">Review open shop receipts →</button>
+      </section>
+      <section class="panel report-center" data-visible-role="WAREHOUSE"><div class="panel-head"><div><span class="section-kicker">TAKE YOUR DATA WITH YOU</span><h2>Download a report</h2><p class="muted">Each file uses the latest records and opens in Excel.</p></div></div><div class="report-grid"><article class="report-card"><span class="report-symbol report-green">↗</span><div><h3>Delivery details</h3><p>Dispatch, request, vehicle, route and receipt status.</p></div><button class="report-button" id="downloadDispatchReport">Download CSV <span>↓</span></button></article><article class="report-card"><span class="report-symbol report-amber">▣</span><div><h3>Warehouse stocks</h3><p>Rice, wheat and sugar balances at each warehouse.</p></div><button class="report-button" id="downloadWarehouseReport">Download CSV <span>↓</span></button></article><article class="report-card"><span class="report-symbol report-blue">⌂</span><div><h3>Fair Price Shop stocks</h3><p>Current stock balances at each fair price shop.</p></div><button class="report-button" id="downloadShopReport">Download CSV <span>↓</span></button></article></div></section><section class="panel quick-ops"><div><span class="section-kicker">NEXT STEP</span><h2>Keep supply moving</h2><p class="muted">Prioritize a shortage, review what is on the road, and close the loop after delivery.</p></div><div class="quick-actions"><button class="primary" data-go="requests">Open request queue <span>→</span></button><button class="secondary" data-go="confirmations" data-visible-role="FPS">Review shop receipts</button></div></section>
+    </section>
+    <section id="page-requests" class="page-view hidden">
+      <section class="panel">
+        <div class="panel-head"><div><h2>Delivery requests</h2><p class="muted">Review request priority, quantities, status, and pending reason.</p></div><button id="processButton" class="primary" data-visible-role="WAREHOUSE" type="button">Process pending requests</button></div>
+        <form id="requestForm" class="request-form"><p id="requestQuotaHint" class="muted hidden">Amounts are limited by the available monthly allocation. Goods dispatched but not yet received still reserve part of the limit.</p>
+          <label id="requestShopLabel">Shop<select id="requestShop" required><option value="FPS01">FPS01 – North One</option><option value="FPS02">FPS02 – North Two</option><option value="FPS03">FPS03 – Central One</option><option value="FPS04">FPS04 – Central Two</option><option value="FPS05">FPS05 – South One</option><option value="FPS06">FPS06 – Remote Shop (no road)</option></select></label><label>Urgency<select id="requestUrgency"><option>HIGH</option><option>MEDIUM</option><option>LOW</option></select></label>
+          <label>Rice kg<input id="rice" type="number" min="0" step="1" value="0"></label><label>Wheat kg<input id="wheat" type="number" min="0" step="1" value="0"></label><label>Sugar kg<input id="sugar" type="number" min="0" step="1" value="0"></label>
+          <button class="primary" type="submit">Create request</button>
+        </form>
+        <div class="table-wrap"><table><thead><tr><th>Request</th><th>Shop</th><th>Urgency</th><th>Items</th><th>Total kg</th><th>Status</th><th>Pending reason</th></tr></thead><tbody id="requestRows"></tbody></table></div>
+      </section>
+    </section>
+    <section id="page-warehouses" class="page-view hidden" data-visible-role="WAREHOUSE"><section class="panel"><div class="panel-head"><div><h2>Warehouse stock</h2><p class="muted">Add warehouses and change their current stock balances.</p></div><button id="downloadWarehouseReportSmall" class="secondary report-shortcut">Download warehouse stock</button></div>
+      <form id="warehouseForm" class="request-form"><label>Warehouse ID<input id="warehouseId" required placeholder="W3"></label><label>Warehouse name<input id="warehouseName" required></label><label>Rice kg<input id="warehouseRice" type="number" min="0" value="0"></label><label>Wheat kg<input id="warehouseWheat" type="number" min="0" value="0"></label><label>Sugar kg<input id="warehouseSugar" type="number" min="0" value="0"></label><label>Connect to<select id="warehouseConnect"><option>W1</option><option>W2</option><option>J1</option><option>J2</option><option>J3</option><option>J4</option></select></label><label>Road time (minutes)<input id="warehouseTime" type="number" min="0.1" step="0.1" value="5"></label><button class="primary" type="submit">Add warehouse</button></form>
+      <form id="warehouseStockForm" class="request-form"><label>Warehouse<select id="stockWarehouse"><option value="W1">W1 – Valam North Warehouse</option><option value="W2">W2 – Valam South Warehouse</option></select></label><label>Commodity<select id="stockCommodity"><option>Rice</option><option>Wheat</option><option>Sugar</option></select></label><label>New stock (kg)<input id="stockQuantity" type="number" min="0" step="0.1" required></label><button class="secondary" type="submit">Save stock balance</button></form>
+      <div id="warehouseCards" class="location-grid"></div></section></section>
+    <section id="page-shops" class="page-view hidden"><section class="panel"><div class="panel-head"><div><h2>Fair Price Shop stock</h2><p class="muted">Add shops here. A shop's stock increases only after you confirm a delivery receipt.</p></div><button id="downloadShopReportSmall" class="secondary report-shortcut">Download shop stock</button></div>
+      <form id="shopForm" class="request-form"><label>Shop ID<input id="newShopId" required placeholder="FPS07"></label><label>Shop name<input id="newShopName" required></label><label>People registered<input id="shopPopulation" type="number" min="1" step="1" required value="0"></label><label>Rice kg<input id="shopRice" type="number" min="0" value="0"></label><label>Wheat kg<input id="shopWheat" type="number" min="0" value="0"></label><label>Sugar kg<input id="shopSugar" type="number" min="0" value="0"></label><label>Connect to<select id="shopConnect"><option>W1</option><option>W2</option><option>J1</option><option>J2</option><option>J3</option><option>J4</option></select></label><label>Road time (minutes)<input id="shopTime" type="number" min="0.1" step="0.1" value="5"></label><button class="primary" type="submit">Add fair price shop</button></form>
+      <div id="shopCards" class="location-grid"></div></section></section>
+    <section id="page-routes" class="page-view hidden"><section class="panel"><div class="panel-head"><div><h2>Road network</h2><p class="muted">Every location and travel time comes from your saved road connections.</p></div><span id="networkSummary" class="network-summary">Loading network…</span></div><section class="route-finder" aria-label="Fastest route finder"><div class="route-finder-copy"><span class="section-kicker">PLAN A JOURNEY</span><h3>Find the quickest route</h3><p>Choose two places, or click two nodes on the map.</p></div><div class="route-controls"><label>From<select id="routeStart"></select></label><span class="route-arrow">→</span><label>To<select id="routeEnd"></select></label><button id="findRouteButton" class="primary" type="button">Show route</button><button id="clearRouteButton" class="quiet" type="button">Clear</button></div><div id="routeResult" class="route-result" aria-live="polite">Choose a start and destination to explore the road network.</div></section>
+      <section class="road-editor panel-subpanel" data-visible-role="WAREHOUSE"><div class="panel-head"><div><span class="section-kicker">ADD AN ALTERNATE ROAD</span><h2>Add a road connection</h2><p class="muted">Connect any two locations. Roads work both ways, and the route finder checks every saved connection.</p></div></div><form id="roadForm" class="request-form road-form"><label>From location<select id="roadFrom" required></select></label><label>To location<select id="roadTo" required></select></label><label>Travel time (minutes)<input id="roadMinutes" type="number" min="0.1" step="0.1" required placeholder="e.g. 8"></label><button class="primary" type="submit">Save road</button></form></section>
+      <div class="network-legend"><span><i class="legend-dot warehouse-dot"></i>Warehouse</span><span><i class="legend-dot junction-dot"></i>Road junction</span><span><i class="legend-dot shop-dot"></i>Fair Price Shop</span></div>
+      <div class="network-scroll"><svg id="networkGraph" class="network-graph" role="img" aria-label="Valam district road network"></svg></div><p class="map-hint">Tip: select any two map locations to highlight their fastest connection.</p>
+      <div class="panel-head edge-heading"><div><h2>Road edges</h2><p class="muted">Connections listed by endpoint and travel time.</p></div></div>
+      <div class="table-wrap"><table><thead><tr><th>From</th><th>To</th><th>Travel time</th><th>Action</th></tr></thead><tbody id="routeRows"></tbody></table></div>
+    </section></section>
+    <section id="page-dispatches" class="page-view hidden"><section class="panel"><div class="panel-head"><div><h2>Dispatch records</h2><p class="muted">Review allocated vehicles, destinations, and receipt status.</p></div><button id="downloadDispatchReportSmall" class="secondary report-shortcut">Download delivery report</button></div><div class="table-wrap"><table><thead><tr><th>Dispatch</th><th>Request</th><th>Warehouse</th><th>Shop</th><th>Vehicle</th><th>Route</th><th>Receipt</th></tr></thead><tbody id="dispatchRows"></tbody></table></div></section></section>
+    <section id="page-confirmations" class="page-view hidden" data-visible-role="FPS"><section class="receipt-hero"><div><span class="receipt-overline">SHOP RECEIVING DESK</span><h2>Close the delivery loop</h2><p>Confirm only after the goods have physically reached the Fair Price Shop. Shop stock is updated after confirmation.</p></div><div class="receipt-hero-count"><strong id="receiptHeroCount">0</strong><span>waiting for shop confirmation</span></div></section><section class="panel"><div class="panel-head"><div><span class="section-kicker">ACTION QUEUE</span><h2>Deliveries to confirm</h2><p class="muted">Check the dispatch and shop before recording receipt.</p></div></div><div id="pendingReceiptCards" class="pending-receipt-grid"></div></section></section>
+    <section id="page-receipts" class="page-view hidden" data-visible-role="FPS"><section class="panel"><h2>Receipt history</h2><p class="muted">Deliveries confirmed by fair price shops.</p><div class="table-wrap"><table><thead><tr><th>Dispatch</th><th>Shop</th><th>Items</th><th>Confirmed at</th></tr></thead><tbody id="receiptRows"></tbody></table></div></section></section>
+    <dialog id="editLocationDialog" class="edit-dialog">
+      <form id="editLocationForm" method="dialog">
+        <div class="dialog-head"><div><p id="editLocationType" class="eyebrow">LOCATION DETAILS</p><h2 id="editLocationTitle">Edit details</h2></div><button type="button" class="quiet dialog-close" aria-label="Close">×</button></div>
+        <input id="editLocationId" type="hidden">
+        <input id="editLocationKind" type="hidden">
+        <label for="editLocationName">Location name</label><input id="editLocationName" required maxlength="80">
+        <div id="editPopulationWrap" class="hidden"><label for="editPopulation">People registered at this shop</label><input id="editPopulation" type="number" min="1" step="1" value="0"></div><label for="editLocationConnect">Connect directly to</label><select id="editLocationConnect"><option value="">No direct road connection</option></select>
+        <label for="editLocationTime">Road travel time (minutes)</label><input id="editLocationTime" type="number" min="0.1" step="0.1" value="5" required>
+        <p class="muted">Road changes add or update one connection. Other roads stay saved; its ID and stock balances stay the same.</p>
+        <div class="dialog-actions"><button type="button" id="cancelLocationEdit" class="secondary">Cancel</button><button class="primary" type="submit">Save details</button></div>
+      </form>
+    </dialog>
+    <p id="message" class="message" aria-live="polite"></p>
+    <footer>Valam District · Public Distribution Supply Chain Operations</footer>
+      </div>
+    </div>
+  </main>
+  <script src="/app.js"></script>
+</body>
+</html>
