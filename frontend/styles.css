@@ -631,6 +631,10 @@ footer{text-align:center;color:#8292b0;font-size:12px;padding:24px 0 0;letter-sp
 .route-chip{padding:5px 8px;background:#eef2ff;color:var(--primary);border-radius:7px;font-weight:800}
 .route-path-arrow{color:#b0bcd8}
 .route-time{margin-left:auto;padding:6px 9px;background:#fffbeb;color:#92400e;border-radius:8px;font-weight:800}
+.route-leg-breakdown{flex-basis:100%;display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:7px;margin-top:3px;padding-top:10px;border-top:1px solid #e9edf5}
+.route-leg-breakdown>strong{grid-column:1/-1;color:#53617c;font-size:9px;text-transform:uppercase;letter-spacing:.07em}
+.route-leg-item{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 9px;border:1px solid #e7ebf4;border-radius:8px;background:#fbfcff;color:#53617c;font-size:10px}
+.route-leg-item strong{color:#33415f;font-size:10px;white-space:nowrap}
 .route-unreachable{border-color:#fde8e8;background:#fff8f8;color:#9a3030}
 .network-summary{flex:none;padding:7px 12px;background:var(--pale);color:var(--primary);border-radius:99px;font-size:10px;font-weight:700}
 .road-editor{margin:0 0 17px;padding:17px;border:1px solid var(--line);border-radius:14px;background:linear-gradient(120deg,#f5f6ff,#fff)}

@@ -307,6 +307,17 @@ function paintRouteResult(route,trip=null){
   const path=document.createElement('div');path.className='route-path';
   route.ids.forEach((id,index)=>{const chip=document.createElement('span');chip.className='route-chip';chip.textContent=id;path.append(chip);if(index<route.ids.length-1){const arrow=document.createElement('span');arrow.className='route-path-arrow';arrow.textContent='→';path.append(arrow)}});
   const time=document.createElement('span');time.className='route-time';time.textContent=route.minutes.toFixed(1)+' min';result.append(path,time);
+  const legs=document.createElement('div');legs.className='route-leg-breakdown';
+  const legsHeading=document.createElement('strong');legsHeading.textContent='Road legs';legs.append(legsHeading);
+  const edgeTimes=new Map((graphCache?.edges||[]).map(edge=>[[edge.from,edge.to].sort().join('|'),Number(edge.minutes)]));
+  for(let index=0;index<route.ids.length-1;index++){
+    const from=route.ids[index],to=route.ids[index+1],leg=document.createElement('div');leg.className='route-leg-item';
+    const places=document.createElement('span');places.textContent=from+' → '+to;
+    const minutes=document.createElement('strong');const legTime=edgeTimes.get([from,to].sort().join('|'));
+    minutes.textContent=Number.isFinite(legTime)?legTime.toFixed(1)+' min':'time unavailable';
+    leg.append(places,minutes);legs.append(leg);
+  }
+  if(route.ids.length>1)result.append(legs);
   if(trip){
     const summary=document.createElement('p');summary.className='trip-route-summary';
     summary.textContent=trip.name+' leaves '+(trip.warehouseName||trip.warehouseId)+' carrying '+Number(trip.loadKg||0).toLocaleString()+' kg.';result.append(summary);
