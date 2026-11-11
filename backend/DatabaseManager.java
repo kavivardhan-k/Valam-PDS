@@ -48,6 +48,7 @@ public class DatabaseManager {
         statement.executeUpdate("CREATE TABLE IF NOT EXISTS fair_price_shops (shop_id TEXT PRIMARY KEY, name TEXT NOT NULL)");
         statement.executeUpdate("CREATE TABLE IF NOT EXISTS roads (location_from TEXT, location_to TEXT, travel_time REAL NOT NULL, PRIMARY KEY(location_from,location_to))");
         statement.executeUpdate("CREATE TABLE IF NOT EXISTS vehicles (vehicle_id TEXT PRIMARY KEY, name TEXT, capacity REAL)");
+        statement.executeUpdate("CREATE TABLE IF NOT EXISTS project_settings (setting_key TEXT PRIMARY KEY, setting_value TEXT NOT NULL)");
         ensureColumn("requests", "arrival_order", "INTEGER DEFAULT 0");
         ensureColumn("users", "role", "TEXT NOT NULL DEFAULT 'WAREHOUSE'");
         ensureColumn("users", "shop_id", "TEXT");
@@ -315,6 +316,10 @@ public class DatabaseManager {
         rs = st.executeQuery("SELECT location_from,location_to,travel_time FROM roads");
         while (rs.next()) system.addRoad(rs.getString(1), rs.getString(2), rs.getDouble(3));
         rs.close();
+        if (!"2".equals(readSetting("road_network_version"))) {
+            Main.addDefaultCompleteRoadConnections(system);
+            saveSetting("road_network_version", "2");
+        }
         rs = st.executeQuery("SELECT location_type,location_id,commodity,quantity FROM stock_balances");
         while (rs.next()) {
             String type = rs.getString(1), id = rs.getString(2), commodity = rs.getString(3); double q = rs.getDouble(4);
@@ -322,6 +327,18 @@ public class DatabaseManager {
             else if (type.equals("SHOP")) { FairPriceShop shop = system.getShop(id); if (shop != null) { CommodityStock stock = shop.getStock(commodity); if (stock == null) shop.addStock(new CommodityStock(commodity, q)); else stock.setQuantity(q); } }
         }
         rs.close(); st.close();
+    }
+
+    private String readSetting(String key) throws Exception {
+        PreparedStatement ps = connection.prepareStatement("SELECT setting_value FROM project_settings WHERE setting_key=?");
+        ps.setString(1, key); ResultSet rs = ps.executeQuery();
+        String value = rs.next() ? rs.getString(1) : null;
+        rs.close(); ps.close(); return value;
+    }
+
+    private void saveSetting(String key, String value) throws Exception {
+        PreparedStatement ps = connection.prepareStatement("INSERT OR REPLACE INTO project_settings(setting_key,setting_value) VALUES(?,?)");
+        ps.setString(1, key); ps.setString(2, value); ps.executeUpdate(); ps.close();
     }
 
     private void saveOneStock(String type, String id, String name, String commodity, CommodityStock stock) throws Exception {

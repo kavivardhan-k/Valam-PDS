@@ -5,6 +5,7 @@ const message=document.querySelector('#message');
 let shopCache=[];
 let warehouseCache=[];
 let dispatchCache=[];
+let receiptCache=[];
 let graphCache={nodes:[],edges:[]};
 let activeRoute=null;
 let refreshInProgress=false;
@@ -109,18 +110,47 @@ function renderReceiptHistory(receipts){
 function renderFleetCards(vehicles){
   const target=document.querySelector('#fleetCards');target.replaceChildren();
   const available=vehicles.filter(vehicle=>vehicle.available).length;
-  document.querySelector('#fleetSummary').textContent=available+' free · '+(vehicles.length-available)+' on delivery';
-  document.querySelector('#fleetReceiptLink').classList.toggle('hidden',available===vehicles.length);
+  const onDelivery=vehicles.length-available;
+  document.querySelector('#fleetSummary').textContent=available+' free · '+onDelivery+' on delivery';
+  const transportCount=document.querySelector('#transportStatCount');
+  const transportDetail=document.querySelector('#transportStatDetail');
+  if(transportCount)transportCount.textContent=available+' free';
+  if(transportDetail)transportDetail.textContent=onDelivery+' on delivery · '+vehicles.length+' total';
   if(!vehicles.length){const empty=document.createElement('div');empty.className='empty-receipts';empty.textContent='No vehicles are configured.';target.append(empty);return;}
   vehicles.forEach(vehicle=>{
     const card=document.createElement('article');card.className='fleet-card '+(vehicle.available?'fleet-free':'fleet-busy');
     const top=document.createElement('div');top.className='fleet-card-top';
-    const icon=document.createElement('span');icon.className='fleet-icon';icon.textContent='↗';
+    const icon=document.createElement('span');icon.className='fleet-icon';icon.textContent=vehicle.capacity>1200?'🚚':'🚐';
     const status=document.createElement('span');status.className='fleet-status';status.textContent=vehicle.available?'Available':'On delivery';top.append(icon,status);
     const name=document.createElement('h3');name.textContent=vehicle.name;
     const capacity=document.createElement('p');capacity.className='fleet-capacity';capacity.textContent='Capacity · '+Number(vehicle.capacity).toLocaleString()+' kg';
-    const note=document.createElement('p');note.className='fleet-note';note.textContent=vehicle.available?'Ready for a suitable request':(vehicle.dispatch?'Assigned to '+vehicle.dispatch+' · confirm receipt to release':'Assigned to a delivery');
-    card.append(top,name,capacity,note);target.append(card);
+    const note=document.createElement('p');note.className='fleet-note';note.textContent=vehicle.available?'Ready for a suitable request':(vehicle.dispatch?'Assigned to '+vehicle.dispatch+' · confirm every shop receipt to release':'Assigned to a delivery');
+    card.append(top,name,capacity,note);
+    if(!vehicle.available){
+      const trip=document.createElement('div');trip.className='fleet-trip-details';
+      const loadTitle=document.createElement('strong');loadTitle.textContent='Currently carrying';
+      const load=document.createElement('div');load.className='fleet-load';load.textContent=Number(vehicle.loadKg||0).toLocaleString()+' kg of '+Number(vehicle.capacity).toLocaleString()+' kg';
+      const cargo=document.createElement('p');cargo.className='fleet-cargo';
+      cargo.textContent=Object.entries(vehicle.cargo||{}).map(([item,amount])=>item+' '+Number(amount).toLocaleString()+' kg').join(' · ')||'No remaining goods';
+      trip.append(loadTitle,load,cargo);
+      if(vehicle.stops&&vehicle.stops.length){
+        const stopTitle=document.createElement('strong');stopTitle.className='fleet-stop-heading';stopTitle.textContent='Deliveries on this trip';trip.append(stopTitle);
+        const list=document.createElement('ol');list.className='fleet-stop-list';
+        vehicle.stops.forEach(stop=>{
+          const row=document.createElement('li');
+          const shop=document.createElement('strong');shop.textContent=stop.shop+' ('+stop.shopId+')';
+          const items=document.createElement('span');items.textContent=Object.entries(stop.items||{}).map(([item,amount])=>item+' '+Number(amount).toLocaleString()+' kg').join(', ');
+          row.append(shop,items);list.append(row);
+        });
+        trip.append(list);
+      }
+      if(vehicle.route&&vehicle.route.length){
+        const routeButton=document.createElement('button');routeButton.type='button';routeButton.className='secondary fleet-route-button';routeButton.textContent='View trip route →';
+        routeButton.addEventListener('click',()=>showVehicleRoute(vehicle));trip.append(routeButton);
+      }
+      card.append(trip);
+    }
+    target.append(card);
   });
 }
 function renderPendingReceipts(dispatches){
@@ -176,7 +206,7 @@ async function refresh(announce=false){
     const [stats,dispatchData,requestData,warehouseData,shopData,receiptData,locationData,graphData,vehicleData,optionsData]=await Promise.all([
       api('/api/stats'),api('/api/dispatches'),api('/api/requests'),fps?Promise.resolve({rows:[]}):api('/api/warehouses'),api('/api/shops'),fps?api('/api/receipts'):Promise.resolve({receipts:[]}),api('/api/locations'),api('/api/graph'),fps?Promise.resolve({vehicles:[]}):api('/api/vehicles')
     ]);
-    showApp();warehouseCache=warehouseData.rows;shopCache=shopData.rows;dispatchCache=dispatchData.dispatches;graphCache=graphData;applyRoleVisibility();activeRoute=null;document.querySelector('#routeResult').classList.remove('route-unreachable');document.querySelector('#routeResult').textContent='Choose a start and destination to explore the road network.';
+    showApp();warehouseCache=warehouseData.rows;shopCache=shopData.rows;dispatchCache=dispatchData.dispatches;receiptCache=receiptData.receipts;graphCache=graphData;applyRoleVisibility();activeRoute=null;document.querySelector('#routeResult').classList.remove('route-unreachable');document.querySelector('#routeResult').textContent='Choose a start and destination to explore the road network.';
     document.querySelector('#requestCount').textContent=stats.requests;
     document.querySelector('#dispatchCount').textContent=stats.dispatches;
     document.querySelector('#successfulDeliveryCount').textContent=stats.delivered;
@@ -269,14 +299,35 @@ function findFastestRoute(start,destination){
   while(cursor!==start){cursor=previous.get(cursor);if(!cursor)return null;ids.unshift(cursor)}
   return {ids,minutes:distance.get(destination)};
 }
-function paintRouteResult(route){
+function paintRouteResult(route,trip=null){
   const result=document.querySelector('#routeResult');result.replaceChildren();
   if(!route){result.textContent='No connected road route was found between these locations.';result.classList.add('route-unreachable');return}
   result.classList.remove('route-unreachable');
-  const label=document.createElement('strong');label.textContent='Fastest available route';result.append(label);
+  const label=document.createElement('strong');label.textContent=trip?'Planned vehicle trip':'Fastest available route';result.append(label);
   const path=document.createElement('div');path.className='route-path';
   route.ids.forEach((id,index)=>{const chip=document.createElement('span');chip.className='route-chip';chip.textContent=id;path.append(chip);if(index<route.ids.length-1){const arrow=document.createElement('span');arrow.className='route-path-arrow';arrow.textContent='→';path.append(arrow)}});
   const time=document.createElement('span');time.className='route-time';time.textContent=route.minutes.toFixed(1)+' min';result.append(path,time);
+  if(trip){
+    const summary=document.createElement('p');summary.className='trip-route-summary';
+    summary.textContent=trip.name+' leaves '+(trip.warehouseName||trip.warehouseId)+' carrying '+Number(trip.loadKg||0).toLocaleString()+' kg.';result.append(summary);
+    const heading=document.createElement('strong');heading.className='trip-stops-heading';heading.textContent='Shop stops and goods';result.append(heading);
+    const stops=document.createElement('ol');stops.className='trip-route-stops';
+    const ordered=[...(trip.stops||[])].sort((a,b)=>route.ids.indexOf(a.shopId)-route.ids.indexOf(b.shopId));
+    ordered.forEach((stop,index)=>{const item=document.createElement('li');const name=document.createElement('strong');name.textContent='Stop '+(index+1)+': '+stop.shop+' ('+stop.shopId+')';const goods=document.createElement('span');goods.textContent=stop.request+' · '+Number(stop.weight).toLocaleString()+' kg · '+Object.entries(stop.items||{}).map(([commodity,amount])=>commodity+' '+Number(amount).toLocaleString()+' kg').join(', ');item.append(name,goods);stops.append(item)});
+    result.append(stops);
+  }
+}
+function showVehicleRoute(vehicle){
+  const route={ids:vehicle.route||[],minutes:Number(vehicle.routeMinutes||0)};
+  if(route.ids.length<2){message.textContent='No saved route is available for this vehicle.';return}
+  openPage('routes');
+  const from=document.querySelector('#routeStart'),to=document.querySelector('#routeEnd');
+  from.value=vehicle.warehouseId||route.ids[0];
+  const lastStop=(vehicle.stops||[]).length?vehicle.stops[vehicle.stops.length-1].shopId:route.ids[route.ids.length-1];
+  to.value=lastStop;
+  activeRoute={...route,trip:vehicle};
+  paintRouteResult(route,vehicle);renderRoadNetwork(graphCache);
+  document.querySelector('#page-routes').scrollIntoView({behavior:'smooth',block:'start'});
 }
 function showFastestRoute(){
   const start=document.querySelector('#routeStart').value,destination=document.querySelector('#routeEnd').value;
@@ -319,15 +370,16 @@ function renderRoadNetwork(graph){
   graph.edges.forEach(edge=>{
     const a=positions.get(edge.from),b=positions.get(edge.to);if(!a||!b)return;
     const onRoute=routeEdges.has(routeEdgeKey(edge.from,edge.to));
-    add('line',{x1:a.x,y1:a.y,x2:b.x,y2:b.y,class:onRoute?'network-edge route-highlight':'network-edge'});
-    const label=add('text',{x:(a.x+b.x)/2,y:(a.y+b.y)/2-8,class:onRoute?'edge-label edge-label-active':'edge-label'});label.textContent=Number(edge.minutes).toFixed(1)+' min';
+    const line=add('line',{x1:a.x,y1:a.y,x2:b.x,y2:b.y,class:onRoute?'network-edge route-highlight':'network-edge'});
+    const roadTip=add('title',{},line);roadTip.textContent=edge.from+' to '+edge.to+': '+Number(edge.minutes).toFixed(1)+' minutes';
+    if(onRoute){const label=add('text',{x:(a.x+b.x)/2,y:(a.y+b.y)/2-8,class:'edge-label edge-label-active'});label.textContent=Number(edge.minutes).toFixed(1)+' min';}
   });
   const rows=document.querySelector('#routeRows');rows.replaceChildren();
   if(!graph.edges.length)emptyRow(rows,4,'No road links have been recorded.');
   else graph.edges.forEach(edge=>{
     const tr=document.createElement('tr'),from=byId.get(edge.from),to=byId.get(edge.to);
     cell(tr,edge.from+' · '+(from?from.name:edge.from));cell(tr,edge.to+' · '+(to?to.name:edge.to));cell(tr,Number(edge.minutes).toFixed(1)+' minutes');
-    const action=cell(tr,'');const remove=document.createElement('button');remove.type='button';remove.className='remove-road';remove.textContent='Remove';remove.setAttribute('aria-label','Remove road '+edge.from+' to '+edge.to);remove.addEventListener('click',()=>removeRoad(edge,remove));action.append(remove);rows.append(tr);
+    const action=cell(tr,'');const remove=document.createElement('button');remove.type='button';remove.className='remove-road';remove.innerHTML='🗑 Remove';remove.setAttribute('aria-label','Remove road '+edge.from+' to '+edge.to);remove.addEventListener('click',()=>removeRoad(edge,remove));action.append(remove);rows.append(tr);
   });
   graph.nodes.forEach(node=>{
     const position=positions.get(node.id),group=add('g',{class:'network-node','data-location':node.id,tabindex:'0',role:'button','aria-label':'Select '+node.id+' '+node.name});
@@ -366,7 +418,6 @@ document.querySelector('#logoutButton').addEventListener('click',async()=>{try{a
 document.addEventListener('click',event=>{const menu=document.querySelector('#profileMenu');if(menu.open&&!menu.contains(event.target))menu.open=false;});
 document.querySelector('#refreshButton').addEventListener('click',()=>refresh(true));
 document.querySelector('#fpsPopulationForm').addEventListener('submit',async event=>{event.preventDefault();message.textContent='';try{await api('/api/shops/population',{method:'POST',body:JSON.stringify({population:document.querySelector('#fpsPopulationInput').value})});if(await refresh())message.textContent='People count updated. Monthly limits have been recalculated for this shop.';}catch(error){message.textContent=error.message;}});
-document.querySelector('#fleetReceiptLink').addEventListener('click',()=>openPage('confirmations'));
 document.querySelector('#processButton').addEventListener('click',async()=>{
   const b=document.querySelector('#processButton');b.disabled=true;b.textContent='Processing…';message.textContent='';
   try{await api('/api/process',{method:'POST',body:'{}'});if(await refresh())message.textContent='Pending requests processed. Review results in the request list or Dispatches tab.';}
@@ -386,6 +437,13 @@ document.querySelector('#shopForm').addEventListener('submit',async event=>{even
 document.querySelector('#warehouseForm').addEventListener('submit',async event=>{event.preventDefault();message.textContent='';try{await api('/api/warehouses',{method:'POST',body:JSON.stringify(newLocationBody('warehouse'))});message.textContent='Warehouse added and saved to records.';event.target.reset();await refresh();openPage('warehouses');}catch(error){message.textContent=error.message;}});
 document.querySelector('#warehouseStockForm').addEventListener('submit',async event=>{event.preventDefault();message.textContent='';try{await api('/api/warehouse-stock',{method:'POST',body:JSON.stringify({warehouseId:document.querySelector('#stockWarehouse').value,commodity:document.querySelector('#stockCommodity').value,quantity:document.querySelector('#stockQuantity').value})});message.textContent='Warehouse stock balance saved.';document.querySelector('#stockQuantity').value='';await refresh();openPage('warehouses');}catch(error){message.textContent=error.message;}});
 const roadForm=document.querySelector('#roadForm');
+const removeRoadFormBtn=document.querySelector('#removeRoadFormBtn');
+if(removeRoadFormBtn)removeRoadFormBtn.addEventListener('click',async()=>{
+  const from=document.querySelector('#roadFrom').value,to=document.querySelector('#roadTo').value;
+  if(!from||!to){message.textContent='Please select both "From location" and "To location" to remove a road connection.';return;}
+  if(from===to){message.textContent='Please select two different locations.';return;}
+  await removeRoad({from,to},removeRoadFormBtn);
+});
 if(roadForm)roadForm.addEventListener('submit',async event=>{
   event.preventDefault();message.textContent='';
   try{
@@ -438,12 +496,227 @@ function downloadShopReport(){
   const rows=shopCache.map(s=>[s.id,s.name,s.population,s.rice,s.wheat,s.sugar,s.riceQuota,s.wheatQuota,s.sugarQuota,s.riceUsed,s.wheatUsed,s.sugarUsed,s.riceCommitted,s.wheatCommitted,s.sugarCommitted,Number(s.rice||0)+Number(s.wheat||0)+Number(s.sugar||0)]);
   downloadCsvReport('fair_price_shop_stocks',['Shop ID','Fair Price Shop','Registered people','Rice stock (kg)','Wheat stock (kg)','Sugar stock (kg)','Rice monthly limit (kg)','Wheat monthly limit (kg)','Sugar monthly limit (kg)','Rice received this month (kg)','Wheat received this month (kg)','Sugar received this month (kg)','Rice allocation reserved this month (kg)','Wheat allocation reserved this month (kg)','Sugar allocation reserved this month (kg)','Total stock (kg)'],rows);
 }
+function downloadReceiptReport(){
+  const rows=receiptCache.map(receipt=>[receipt.dispatchId,receipt.shop,receipt.items,receipt.confirmedAt]);
+  downloadCsvReport('receipt_history',['Dispatch ID','Fair Price Shop','Items','Confirmed at'],rows);
+}
 document.querySelector('#findRouteButton').addEventListener('click',showFastestRoute);
 document.querySelector('#clearRouteButton').addEventListener('click',clearFastestRoute);
 document.querySelector('#routeStart').addEventListener('change',()=>{activeRoute=null;const result=document.querySelector('#routeResult');result.classList.remove('route-unreachable');result.textContent='Choose a start and destination to explore the road network.';renderRoadNetwork(graphCache)});
 document.querySelector('#routeEnd').addEventListener('change',()=>{activeRoute=null;const result=document.querySelector('#routeResult');result.classList.remove('route-unreachable');result.textContent='Choose a start and destination to explore the road network.';renderRoadNetwork(graphCache)});
 async function downloadFreshReport(action){if(await refresh())action();}
-[['downloadDispatchReport',downloadDeliveryReport],['downloadDispatchReportSmall',downloadDeliveryReport],['downloadWarehouseReport',downloadWarehouseReport],['downloadWarehouseReportSmall',downloadWarehouseReport],['downloadShopReport',downloadShopReport],['downloadShopReportSmall',downloadShopReport]].forEach(([id,action])=>document.querySelector('#'+id).addEventListener('click',()=>downloadFreshReport(action)));
+[['downloadDispatchReport',downloadDeliveryReport],['downloadDispatchReportSmall',downloadDeliveryReport],['downloadWarehouseReport',downloadWarehouseReport],['downloadWarehouseReportSmall',downloadWarehouseReport],['downloadShopReport',downloadShopReport],['downloadShopReportSmall',downloadShopReport],['downloadReceiptReport',downloadReceiptReport]].forEach(([id,action])=>{const button=document.querySelector('#'+id);if(button)button.addEventListener('click',()=>downloadFreshReport(action));});
 document.querySelector('#todayLabel').textContent=new Date().toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'});
 loadCaptcha('login');
 refresh();
+
+
+// ===== VIBE DASHBOARD — appended enhancement =====
+(function(){
+  // Patch: wrap refresh() to also sync vibe dashboard and restore icon button
+  const _origRefresh = (typeof refresh === 'function') ? refresh : window.refresh;
+  if(typeof _origRefresh === 'function'){
+    window.refresh = refresh = async function(announce){
+      const result = await _origRefresh.call(this, announce);
+      // Restore the icon button text (original refresh() sets it to "Refresh")
+      const rb = document.getElementById('refreshButton');
+      if(rb) rb.textContent = '↻';
+      syncVibeDashboard();
+      return result;
+    };
+  }
+
+  function syncVibeDashboard(){
+    syncKanbanFromDOM();
+    syncProgressFromDOM();
+    syncUpcomingDeadlines();
+  }
+
+  function syncUpcomingDeadlines(){
+    const list = document.getElementById('upcomingList');
+    if(!list) return;
+    const now = new Date();
+    const months = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+    const curMonth = months[now.getMonth()];
+    const d1 = now.getDate();
+    const d2 = new Date(now.getTime() + 2*86400000).getDate();
+    const d3 = new Date(now.getTime() + 6*86400000).getDate();
+
+    list.innerHTML = `
+      <div class="upcoming-item">
+        <div class="upcoming-date-badge" style="background:#eef2ff;color:#4f6ef7;">
+          <span class="upcoming-day">${d1}</span>
+          <span class="upcoming-month">${curMonth}</span>
+        </div>
+        <div class="upcoming-detail">
+          <strong>Daily Dispatch Batch</strong>
+          <small>Review prioritized shops</small>
+        </div>
+      </div>
+      <div class="upcoming-item">
+        <div class="upcoming-date-badge" style="background:#f0fdfa;color:#0d9488;">
+          <span class="upcoming-day">${d2}</span>
+          <span class="upcoming-month">${curMonth}</span>
+        </div>
+        <div class="upcoming-detail">
+          <strong>Shop Stock Reconciliation</strong>
+          <small>FPS monthly allocations</small>
+        </div>
+      </div>
+      <div class="upcoming-item">
+        <div class="upcoming-date-badge" style="background:#fffbeb;color:#d97706;">
+          <span class="upcoming-day">${d3}</span>
+          <span class="upcoming-month">${curMonth}</span>
+        </div>
+        <div class="upcoming-detail">
+          <strong>District Buffer Audit</strong>
+          <small>Warehouse grain reserves</small>
+        </div>
+      </div>
+    `;
+  }
+
+  function syncKanbanFromDOM(){
+    const rows = Array.from(document.querySelectorAll('#requestRows tr:not(.month-heading)'));
+    const pending = rows.filter(tr => {
+      const cells = tr.querySelectorAll('td');
+      return cells[5] && cells[5].textContent.trim() === 'PENDING';
+    }).map(tr => {
+      const c = tr.querySelectorAll('td');
+      return {id: c[0]?.textContent, shop: c[1]?.textContent, urgency: c[2]?.textContent};
+    });
+
+    const dispatchRows = Array.from(document.querySelectorAll('#dispatchRows tr'));
+    const dispatched = dispatchRows.filter(tr => {
+      const cells = tr.querySelectorAll('td');
+      return cells[6] && cells[6].textContent.trim() === 'Waiting';
+    }).map(tr => {
+      const c = tr.querySelectorAll('td');
+      return {id: c[0]?.textContent, shop: c[3]?.textContent, warehouse: c[2]?.textContent, receipt: 'Waiting'};
+    });
+    const delivered = dispatchRows.filter(tr => {
+      const cells = tr.querySelectorAll('td');
+      return cells[6] && cells[6].textContent.trim() === 'Confirmed';
+    }).map(tr => {
+      const c = tr.querySelectorAll('td');
+      return {id: c[0]?.textContent, shop: c[3]?.textContent, warehouse: c[2]?.textContent, receipt: 'Confirmed'};
+    });
+
+    renderKanbanCol('kanban-pending-cards', 'kanban-pending-count', pending);
+    renderKanbanCol('kanban-dispatched-cards', 'kanban-dispatched-count', dispatched);
+    renderKanbanCol('kanban-delivered-cards', 'kanban-delivered-count', delivered);
+  }
+
+  function renderKanbanCol(cardsId, countId, items){
+    const container = document.getElementById(cardsId);
+    const countEl = document.getElementById(countId);
+    if(!container) return;
+    if(countEl) countEl.textContent = items.length;
+    container.replaceChildren();
+    if(!items.length){
+      const e = document.createElement('div');
+      e.className = 'kanban-empty';
+      e.textContent = 'No items here';
+      container.append(e);
+      return;
+    }
+    items.slice(0,5).forEach(item => {
+      const card = document.createElement('div');
+      card.className = 'kanban-card';
+      const urgency = item.urgency || (item.receipt === 'Confirmed' ? 'DONE' : 'IN TRANSIT');
+      const bc = urgency==='HIGH'?'badge-high':urgency==='DONE'?'badge-done':urgency==='IN TRANSIT'?'badge-transit':'badge-med';
+      const shopCode = (item.shop||'?').replace(/[^A-Z0-9]/gi,'').slice(0,2).toUpperCase();
+      const statusText=item.receipt==='Confirmed'?'Receipt confirmed':item.receipt==='Waiting'?'Awaiting receipt':'Pending request';
+      card.innerHTML = `
+        <div class="kanban-card-top">
+          <span class="kanban-badge ${bc}">${urgency}</span>
+        </div>
+        <div class="kanban-card-title">${item.id||'—'}</div>
+        <div class="kanban-card-sub">${item.shop||item.warehouse||'—'}</div>
+        <div class="kanban-card-foot">
+          <span class="kanban-card-date">${statusText}</span>
+          <span class="kanban-avatar">${shopCode}</span>
+        </div>`;
+      container.append(card);
+    });
+  }
+
+  function syncProgressFromDOM(){
+    const total = parseInt(document.getElementById('requestCount')?.textContent)||0;
+    const delivered = parseInt(document.getElementById('successfulDeliveryCount')?.textContent)||0;
+    const pct = total>0?Math.round((delivered/total)*100):0;
+    const fill = document.getElementById('priorityProgressFill');
+    const label = document.getElementById('priorityProgressLabel');
+    if(fill) fill.style.width = pct+'%';
+    if(label) label.textContent = pct+'% of recorded requests have confirmed receipts';
+  }
+
+  // Hook quick tool buttons in right panel
+  document.querySelectorAll('.quick-tool-btn[data-go]').forEach(b => {
+    b.addEventListener('click', () => openPage(b.dataset.go));
+  });
+  const qrReports = document.getElementById('qr-reports');
+  if(qrReports){
+    qrReports.addEventListener('click', () => {
+      openPage('dashboard');
+      const rc = document.querySelector('.report-center');
+      if(rc) rc.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  }
+  document.querySelectorAll('.allocation-head button[data-go]').forEach(b => {
+    b.addEventListener('click', () => openPage(b.dataset.go));
+  });
+  document.querySelectorAll('.upcoming-head button[data-go]').forEach(b => {
+    b.addEventListener('click', () => openPage(b.dataset.go));
+  });
+
+  // Right panel search navigates to relevant sections
+  const rsInput = document.querySelector('.right-search-input');
+  if(rsInput){
+    rsInput.addEventListener('keydown', e => {
+      if(e.key === 'Enter') {
+        const q = rsInput.value.toLowerCase();
+        if(q.includes('request')) openPage('requests');
+        else if(q.includes('dispatch')) openPage('dispatches');
+        else if(q.includes('shop')) openPage('shops');
+        else if(q.includes('warehouse')) openPage('warehouses');
+        else if(q.includes('route')||q.includes('road')) openPage('routes');
+        else message.textContent=q.trim()?'No matching section found. Try requests, dispatches, shops, warehouses, or roads.':'Enter a section name to navigate.';
+        rsInput.value = '';
+      }
+    });
+  }
+
+  // Override fleet render to also update allocation panel
+  const _origRenderFleet = (typeof renderFleetCards === 'function') ? renderFleetCards : window.renderFleetCards;
+  if(typeof _origRenderFleet === 'function'){
+    window.renderFleetCards = renderFleetCards = function(vehicles){
+      _origRenderFleet.call(this, vehicles);
+      updateAllocationPanel(vehicles);
+    };
+  }
+
+  function updateAllocationPanel(vehicles){
+    const list = document.getElementById('allocationList');
+    if(!list) return;
+    list.replaceChildren();
+    if(!vehicles||!vehicles.length){
+      list.innerHTML = '<div class="allocation-item"><div class="allocation-name">No vehicles configured</div></div>';
+      return;
+    }
+    vehicles.forEach(v => {
+      const item = document.createElement('div');
+      item.className = 'allocation-item';
+      const busy = !v.available;
+      item.innerHTML = `
+        <div class="allocation-name">${v.name}</div>
+        <div class="allocation-bar-wrap"><div class="allocation-bar ${busy?'allocation-bar-busy':'allocation-bar-free'}" style="width:${busy?'100':'15'}%"></div></div>
+        <div class="allocation-tasks">${v.available?'Free':'On delivery'}</div>
+      `;
+      list.append(item);
+    });
+  }
+
+  // Sync on first load (after initial refresh() completes)
+  setTimeout(() => syncVibeDashboard(), 1200);
+})();

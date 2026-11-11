@@ -151,15 +151,28 @@ import java.util.Scanner;
         validateNewLocation(id, name, travelTime);
         if (hasLocation(id)) throw new IllegalArgumentException("That location ID already exists.");
         if (connectTo == null || !roadMap.getRoads().containsKey(connectTo)) throw new IllegalArgumentException("Choose a connected location that exists.");
+        ArrayList<String> existingLocations = new ArrayList<String>(roadMap.getRoads().keySet());
+        Collections.sort(existingLocations);
         Warehouse w = new Warehouse(id, name); w.addStock(new CommodityStock("Rice", rice)); w.addStock(new CommodityStock("Wheat", wheat)); w.addStock(new CommodityStock("Sugar", sugar));
-        addWarehouse(w); addRoad(id, connectTo, travelTime);
+        addWarehouse(w);
+        addRoadsToEveryLocation(id, connectTo, travelTime, existingLocations);
     }
     public void addNewShop(String id, String name, double rice, double wheat, double sugar, String connectTo, double travelTime) {
         validateNewLocation(id, name, travelTime);
         if (hasLocation(id)) throw new IllegalArgumentException("That location ID already exists.");
         if (connectTo == null || !roadMap.getRoads().containsKey(connectTo)) throw new IllegalArgumentException("Choose a connected location that exists.");
+        ArrayList<String> existingLocations = new ArrayList<String>(roadMap.getRoads().keySet());
+        Collections.sort(existingLocations);
         FairPriceShop s = new FairPriceShop(id, name); s.addStock(new CommodityStock("Rice", rice)); s.addStock(new CommodityStock("Wheat", wheat)); s.addStock(new CommodityStock("Sugar", sugar));
-        addShop(s); addRoad(id, connectTo, travelTime);
+        addShop(s);
+        addRoadsToEveryLocation(id, connectTo, travelTime, existingLocations);
+    }
+    private void addRoadsToEveryLocation(String newId, String selected, double selectedTime, ArrayList<String> existing) {
+        for (int i = 0; i < existing.size(); i++) {
+            String other = existing.get(i);
+            double minutes = other.equals(selected) ? selectedTime : selectedTime + 2.5 + (i % 9) * 1.7;
+            addRoad(newId, other, minutes);
+        }
     }
     public boolean updateWarehouseStock(String id, String commodity, double amount) {
         Warehouse w = warehouses.get(id); return w != null && w.setStock(commodity, amount);
@@ -189,6 +202,7 @@ import java.util.Scanner;
             if (record.getRecordId().equalsIgnoreCase(dispatchId)) {
                 if (record.confirmReceipt()) {
                     receiptHistory.add(record.getRecordId() + " - " + record.getRequest().getShop().getName());
+                    releaseVehicleWhenTripIsComplete(record.getVehicle());
                     return true;
                 }
                 return false;
@@ -220,6 +234,7 @@ import java.util.Scanner;
 
          for (int i = 0; i < requests.size(); i++) {
             if (requests.get(i).getStatus().equals("PENDING")) {
+                requests.get(i).setPendingReason("");
                 requestQueue.add(requests.get(i));
             }
         }
@@ -229,105 +244,155 @@ import java.util.Scanner;
             return;
         }
 
-        while (!requestQueue.isEmpty()) {
-            DeliveryRequest request = requestQueue.poll();
-            tryDispatch(request);
+        ArrayList<DeliveryRequest> orderedRequests = new ArrayList<DeliveryRequest>();
+        while (!requestQueue.isEmpty()) orderedRequests.add(requestQueue.poll());
+
+        ArrayList<DeliveryVehicle> availableVehicles = new ArrayList<DeliveryVehicle>();
+        for (DeliveryVehicle vehicle : vehicles.values()) if (vehicle.isAvailable()) availableVehicles.add(vehicle);
+        Collections.sort(availableVehicles, new java.util.Comparator<DeliveryVehicle>() {
+            public int compare(DeliveryVehicle first, DeliveryVehicle second) {
+                int byCapacity = Double.compare(second.getCapacity(), first.getCapacity());
+                return byCapacity != 0 ? byCapacity : first.getVehicleId().compareTo(second.getVehicleId());
+            }
+        });
+
+        ArrayList<DeliveryRequest> dispatched = new ArrayList<DeliveryRequest>();
+        for (DeliveryVehicle vehicle : availableVehicles) {
+            ArrayList<DeliveryRequest> tripRequests = new ArrayList<DeliveryRequest>();
+            double tripWeight = 0;
+            TripPlan tripPlan = null;
+            for (DeliveryRequest request : orderedRequests) {
+                if (dispatched.contains(request) || !request.getStatus().equals("PENDING")) continue;
+                if (tripWeight + request.getTotalWeight() > vehicle.getCapacity()) continue;
+                ArrayList<DeliveryRequest> proposed = new ArrayList<DeliveryRequest>(tripRequests);
+                proposed.add(request);
+                TripPlan proposedPlan = findTripPlan(proposed, vehicle);
+                if (proposedPlan != null) {
+                    tripRequests.add(request);
+                    tripWeight += request.getTotalWeight();
+                    tripPlan = proposedPlan;
+                }
+            }
+            if (!tripRequests.isEmpty()) {
+                dispatchTrip(tripRequests, vehicle, tripPlan);
+                dispatched.addAll(tripRequests);
+            }
         }
-    }
 
-     private Warehouse findWarehouseFor(DeliveryRequest request) {
-        ArrayList<String> warehouseIds = new ArrayList<String>(warehouses.keySet());
-        Collections.sort(warehouseIds);
-        Warehouse bestWarehouse = null;
-        double shortestTime = Double.MAX_VALUE;
-
-        for (int i = 0; i < warehouseIds.size(); i++) {
-            Warehouse warehouse = warehouses.get(warehouseIds.get(i));
-            Route route = roadMap.findFastestRoute(
-                    warehouse.getWarehouseId(), request.getShop().getShopId());
-
-            if (route != null && hasAllStock(warehouse, request)) {
-                if (route.getTotalTime() < shortestTime) {
-                    shortestTime = route.getTotalTime();
-                    bestWarehouse = warehouse;
+        for (DeliveryRequest request : orderedRequests) {
+            if (request.getStatus().equals("PENDING") &&
+                    (request.getPendingReason() == null || request.getPendingReason().isEmpty())) {
+                if (request.getTotalWeight() > largestVehicleCapacity()) {
+                    keepPending(request, vehiclePendingReason(request.getTotalWeight()));
+                } else if (!hasAnyRouteTo(request.getShop())) {
+                    keepPending(request, "The shop cannot be reached from either warehouse.");
+                } else if (!hasAvailableVehicle()) {
+                    keepPending(request, "All suitable vehicles are assigned to trips. This request will be reconsidered when a vehicle is free.");
+                } else {
+                    keepPending(request, "No available trip could include this request with the current warehouse stock and monthly allocation.");
                 }
             }
         }
-        return bestWarehouse;
     }
 
-    private boolean hasAllStock(Warehouse warehouse, DeliveryRequest request) {
-        for (String commodity : request.getRequirements().keySet()) {
-            double amount = request.getRequirements().get(commodity);
-            if (!warehouse.canFulfill(commodity, amount)) {
-                return false;
-            }
-        }
-        return true;
+    private static class TripPlan {
+        private Warehouse warehouse;
+        private Route route;
+        private TripPlan(Warehouse warehouse, Route route) { this.warehouse = warehouse; this.route = route; }
     }
 
-     private void tryDispatch(DeliveryRequest request) {
-        FairPriceShop shop = request.getShop();
-        for (String commodity : request.getRequirements().keySet()) {
-            double amount = request.getRequirements().get(commodity);
-            double remaining = getMonthlyRemaining(shop.getShopId(), commodity);
-            if (amount > remaining + 0.000001) {
-                keepPending(request, "Monthly " + commodity + " limit is " + shop.getMonthlyQuota(commodity) + " kg; " + remaining + " kg remains for " + shop.getName() + ".");
-                return;
+    private TripPlan findTripPlan(ArrayList<DeliveryRequest> tripRequests, DeliveryVehicle vehicle) {
+        double weight = 0;
+        HashMap<String, Double> neededByCommodity = new HashMap<String, Double>();
+        HashMap<String, HashMap<String, Double>> neededByShop = new HashMap<String, HashMap<String, Double>>();
+        ArrayList<String> shopIds = new ArrayList<String>();
+        for (DeliveryRequest request : tripRequests) {
+            weight += request.getTotalWeight();
+            String shopId = request.getShop().getShopId();
+            if (!shopIds.contains(shopId)) shopIds.add(shopId);
+            HashMap<String, Double> shopNeeds = neededByShop.get(shopId);
+            if (shopNeeds == null) { shopNeeds = new HashMap<String, Double>(); neededByShop.put(shopId, shopNeeds); }
+            for (String commodity : request.getRequirements().keySet()) {
+                double amount = request.getRequirements().get(commodity);
+                Double old = neededByCommodity.get(commodity);
+                neededByCommodity.put(commodity, (old == null ? 0 : old) + amount);
+                Double shopOld = shopNeeds.get(commodity);
+                shopNeeds.put(commodity, (shopOld == null ? 0 : shopOld) + amount);
             }
         }
-        Warehouse warehouse = findWarehouseFor(request);
-        if (warehouse == null) {
-            if (!hasAnyRouteTo(request.getShop())) {
-                keepPending(request, "The shop cannot be reached from either warehouse.");
-            } else {
-                keepPending(request, "No reachable warehouse has all requested commodities.");
-            }
-            return;
-        }
-
-        Route route = roadMap.findFastestRoute(
-                warehouse.getWarehouseId(), request.getShop().getShopId());
-        DeliveryVehicle vehicle = findVehicleFor(request.getTotalWeight());
-        if (vehicle == null) {
-            keepPending(request, vehiclePendingReason(request.getTotalWeight()));
-            return;
-        }
-
-         boolean reservationWorked = true;
-        for (String commodity : request.getRequirements().keySet()) {
-            double amount = request.getRequirements().get(commodity);
-            if (!warehouse.reserveStock(commodity, amount)) {
-                reservationWorked = false;
-                break;
+        if (!vehicle.canCarry(weight)) return null;
+        for (String shopId : neededByShop.keySet()) {
+            for (String commodity : neededByShop.get(shopId).keySet()) {
+                if (neededByShop.get(shopId).get(commodity) > getMonthlyRemaining(shopId, commodity) + 0.000001) return null;
             }
         }
 
-        if (!reservationWorked) {
-            keepPending(request, "Stock changed before the whole request could be reserved.");
-            return;
+        ArrayList<String> warehouseIds = new ArrayList<String>(warehouses.keySet());
+        Collections.sort(warehouseIds);
+        Warehouse bestWarehouse = null;
+        Route bestRoute = null;
+        for (String warehouseId : warehouseIds) {
+            Warehouse warehouse = warehouses.get(warehouseId);
+            boolean hasStock = true;
+            for (String commodity : neededByCommodity.keySet()) {
+                if (!warehouse.canFulfill(commodity, neededByCommodity.get(commodity))) { hasStock = false; break; }
+            }
+            if (!hasStock) continue;
+            Route route = roadMap.findFastestRouteThrough(warehouse.getWarehouseId(), shopIds);
+            if (route != null && (bestRoute == null || route.getTotalTime() < bestRoute.getTotalTime())) {
+                bestWarehouse = warehouse;
+                bestRoute = route;
+            }
         }
+        return bestWarehouse == null ? null : new TripPlan(bestWarehouse, bestRoute);
+    }
 
-         for (String commodity : request.getRequirements().keySet()) {
-            double amount = request.getRequirements().get(commodity);
-            warehouse.dispatchStock(commodity, amount);
+    private void dispatchTrip(ArrayList<DeliveryRequest> tripRequests, DeliveryVehicle vehicle, TripPlan plan) {
+        HashMap<String, Double> totals = new HashMap<String, Double>();
+        for (DeliveryRequest request : tripRequests) {
+            for (String commodity : request.getRequirements().keySet()) {
+                Double old = totals.get(commodity);
+                totals.put(commodity, (old == null ? 0 : old) + request.getRequirements().get(commodity));
+            }
         }
+        // The whole trip load is reserved before any stock is deducted.
+        for (String commodity : totals.keySet()) plan.warehouse.reserveStock(commodity, totals.get(commodity));
+        for (String commodity : totals.keySet()) plan.warehouse.dispatchStock(commodity, totals.get(commodity));
         vehicle.assignVehicle();
-        request.setStatus("DISPATCHED");
-        request.setPendingReason("");
-
-        String recordId = "DSP" + nextDispatchNumber;
-        nextDispatchNumber++;
-        DispatchRecord record = new DispatchRecord(recordId, request,
-                warehouse, vehicle, route);
-        dispatchRecords.add(record);
-        HashMap<String, Double> used = monthlyUsed.get(shop.getShopId());
-        if (used == null) { used = new HashMap<String, Double>(); monthlyUsed.put(shop.getShopId(), used); }
-        for (String commodity : request.getRequirements().keySet()) {
-            Double old = used.get(commodity); used.put(commodity, (old == null ? 0 : old) + request.getRequirements().get(commodity));
+        for (DeliveryRequest request : tripRequests) {
+            request.setStatus("DISPATCHED");
+            request.setPendingReason("");
+            String recordId = "DSP" + nextDispatchNumber++;
+            DispatchRecord record = new DispatchRecord(recordId, request, plan.warehouse, vehicle, plan.route);
+            dispatchRecords.add(record);
+            HashMap<String, Double> used = monthlyUsed.get(request.getShop().getShopId());
+            if (used == null) { used = new HashMap<String, Double>(); monthlyUsed.put(request.getShop().getShopId(), used); }
+            for (String commodity : request.getRequirements().keySet()) {
+                Double old = used.get(commodity);
+                used.put(commodity, (old == null ? 0 : old) + request.getRequirements().get(commodity));
+            }
+            System.out.println("Request " + request.getRequestId() + " is on trip " + vehicle.getVehicleName() + ".");
         }
-        System.out.println("Request " + request.getRequestId() + " dispatched.");
-        record.displayRecord();
+        System.out.println("One trip will serve " + tripRequests.size() + " shop request(s). Route:");
+        plan.route.displayRoute();
+    }
+
+    private double largestVehicleCapacity() {
+        double largest = 0;
+        for (DeliveryVehicle vehicle : vehicles.values()) largest = Math.max(largest, vehicle.getCapacity());
+        return largest;
+    }
+
+    private boolean hasAvailableVehicle() {
+        for (DeliveryVehicle vehicle : vehicles.values()) if (vehicle.isAvailable()) return true;
+        return false;
+    }
+
+    private void releaseVehicleWhenTripIsComplete(DeliveryVehicle vehicle) {
+        for (DispatchRecord other : dispatchRecords) {
+            if (other.getVehicle().getVehicleId().equals(vehicle.getVehicleId()) && !other.isReceived()) return;
+        }
+        vehicle.releaseVehicle();
     }
 
     private boolean hasAnyRouteTo(FairPriceShop shop) {
@@ -437,9 +502,7 @@ import java.util.Scanner;
         for (int i = 0; i < dispatchRecords.size(); i++) {
             DispatchRecord record = dispatchRecords.get(i);
             if (record.getRecordId().equalsIgnoreCase(id)) {
-                if (record.confirmReceipt()) {
-                    receiptHistory.add(record.getRecordId() + " - "
-                            + record.getRequest().getShop().getName());
+                if (confirmReceipt(record.getRecordId())) {
                     System.out.println("Receipt confirmed. Shop stock was updated.");
                 } else {
                     System.out.println("Receipt was already confirmed.");

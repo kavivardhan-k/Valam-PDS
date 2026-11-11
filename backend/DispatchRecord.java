@@ -52,7 +52,6 @@
         }
         received = true;
         request.setStatus("DELIVERED");
-        vehicle.releaseVehicle();
         return true;
     }
 

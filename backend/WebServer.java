@@ -179,12 +179,17 @@ public class WebServer {
         ArrayList<DeliveryVehicle> vehicles = system.getVehicles();
         for (int i = 0; i < vehicles.size(); i++) {
             DeliveryVehicle vehicle = vehicles.get(i);
-            String dispatchId = "";
+            ArrayList<DispatchRecord> activeTrip = new ArrayList<DispatchRecord>();
+            HashMap<String, Double> cargo = new HashMap<String, Double>();
+            double loadKg = 0;
             for (DispatchRecord record : system.getDispatchRecords()) {
-                if (!record.isReceived()
-                        && record.getVehicle().getVehicleId().equals(vehicle.getVehicleId())) {
-                    dispatchId = record.getRecordId();
-                    break;
+                if (!record.isReceived() && record.getVehicle().getVehicleId().equals(vehicle.getVehicleId())) {
+                    activeTrip.add(record);
+                    loadKg += record.getRequest().getTotalWeight();
+                    for (String commodity : record.getRequest().getRequirements().keySet()) {
+                        Double old = cargo.get(commodity);
+                        cargo.put(commodity, (old == null ? 0 : old) + record.getRequest().getRequirements().get(commodity));
+                    }
                 }
             }
             if (i > 0) out.append(',');
@@ -192,7 +197,43 @@ public class WebServer {
                .append(",\"name\":").append(json(vehicle.getVehicleName()))
                .append(",\"capacity\":").append(vehicle.getCapacity())
                .append(",\"available\":").append(vehicle.isAvailable())
-               .append(",\"dispatch\":").append(json(dispatchId)).append('}');
+               .append(",\"dispatch\":").append(json(activeTrip.isEmpty() ? "" : activeTrip.get(0).getRecordId()))
+               .append(",\"loadKg\":").append(loadKg).append(",\"cargo\":{");
+            boolean firstCargo = true;
+            for (String commodity : new java.util.TreeSet<String>(cargo.keySet())) {
+                if (!firstCargo) out.append(',');
+                firstCargo = false;
+                out.append(json(commodity)).append(':').append(cargo.get(commodity));
+            }
+            out.append("},\"warehouseId\":").append(json(activeTrip.isEmpty() ? "" : activeTrip.get(0).getWarehouse().getWarehouseId()))
+               .append(",\"warehouseName\":").append(json(activeTrip.isEmpty() ? "" : activeTrip.get(0).getWarehouse().getName()))
+               .append(",\"routeMinutes\":").append(activeTrip.isEmpty() ? 0 : activeTrip.get(0).getRoute().getTotalTime())
+               .append(",\"route\":[");
+            if (!activeTrip.isEmpty()) {
+                ArrayList<String> locations = activeTrip.get(0).getRoute().getLocations();
+                for (int j = 0; j < locations.size(); j++) {
+                    if (j > 0) out.append(',');
+                    out.append(json(locations.get(j)));
+                }
+            }
+            out.append("],\"stops\":[");
+            for (int j = 0; j < activeTrip.size(); j++) {
+                DispatchRecord record = activeTrip.get(j);
+                if (j > 0) out.append(',');
+                out.append("{\"shopId\":").append(json(record.getRequest().getShop().getShopId()))
+                   .append(",\"shop\":").append(json(record.getRequest().getShop().getName()))
+                   .append(",\"request\":").append(json(record.getRequest().getRequestId()))
+                   .append(",\"weight\":").append(record.getRequest().getTotalWeight())
+                   .append(",\"items\":{");
+                boolean firstItem = true;
+                for (String commodity : new java.util.TreeSet<String>(record.getRequest().getRequirements().keySet())) {
+                    if (!firstItem) out.append(',');
+                    firstItem = false;
+                    out.append(json(commodity)).append(':').append(record.getRequest().getRequirements().get(commodity));
+                }
+                out.append("}}");
+            }
+            out.append("]}");
         }
         return out.append("]}").toString();
     }

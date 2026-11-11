@@ -1,3 +1,4 @@
+import java.util.ArrayList;
 import java.util.HashMap;
 
  public class Main {
@@ -40,16 +41,7 @@ import java.util.HashMap;
         system.addVehicle(new SupplyTruck("V2", "Supply Truck 1", 1000));
         system.addVehicle(new SupplyTruck("V3", "Supply Truck 2", 1000));
 
-         system.addRoad("W1", "J1", 10);
-        system.addRoad("J1", "FPS01", 10);
-        system.addRoad("J1", "FPS02", 15);
-        system.addRoad("J1", "J2", 8);
-        system.addRoad("J2", "FPS03", 10);
-        system.addRoad("J2", "FPS04", 14);
-        system.addRoad("W2", "J3", 8);
-        system.addRoad("J3", "FPS05", 12);
-        system.addRoad("J3", "J2", 7);
-        system.addRoad("J4", "J3", 6);  
+        addDefaultCompleteRoadConnections(system);
 
          addRequest(system, "REQ01", "FPS01", "LOW", "Rice", 20);
         addRequest(system, "REQ02", "FPS02", "LOW", "Wheat", 15);
@@ -72,6 +64,23 @@ import java.util.HashMap;
         addRequest(system, "REQ15", "FPS01", "HIGH", "Sugar", 40);
 
         return system;
+    }
+
+    public static void addDefaultCompleteRoadConnections(PDSSystem system) {
+        ArrayList<String> places = new ArrayList<String>();
+        places.add("W1"); places.add("W2");
+        places.add("J1"); places.add("J2"); places.add("J3"); places.add("J4");
+        places.add("FPS01"); places.add("FPS02"); places.add("FPS03");
+        places.add("FPS04"); places.add("FPS05"); places.add("FPS06");
+        for (int i = 0; i < places.size(); i++) {
+            for (int j = i + 1; j < places.size(); j++) {
+                // Different positive times make the network connected while leaving
+                // faster multi-road routes for Dijkstra's algorithm to discover.
+                double minutes = 7.0 + Math.abs(j - i) * 1.6 + ((i * 17 + j * 29) % 19);
+                minutes = Math.round(minutes * 10.0) / 10.0;
+                system.addRoad(places.get(i), places.get(j), minutes);
+            }
+        }
     }
 
     private static FairPriceShop makeShop(String id, String name) {
